@@ -42,6 +42,9 @@ Built with **React 19 + Vite**, **Tailwind CSS v4** and **lucide-react**, with r
   2. **Family priority — no crossed wires.** Databases describe different *domains*, so a barcode collision between them would only add noise (a "Nutella" song, a drug sharing a food code, a mis-scanned "ghost" record squatting on a real UPC). Hits are therefore grouped into families and only the highest-priority non-empty family is kept: **medicine → openfacts → retail → book → media**. `medicine` deliberately outranks `openfacts`, because an openFDA hit is an exact regulatory-registry match while the crowdsourced databases demonstrably contain junk entries.
   3. **Offline barcode analysis.** Every code is decoded locally: symbology (EAN-8 / UPC-A / EAN-13 / GTIN-14 / ISBN / ISSN), the **GS1 country of origin** of the manufacturer, and the **check digit** is verified. This works with no network at all, so even a product no database has ever seen still shows a truthful "barcode profile".
   4. **A local knowledge base that keeps learning.** Everything ever looked up — or typed in by hand — is remembered in `localStorage`, so repeat scans resolve instantly and offline, and the catalogue grows the more you scan.
+- **Full composition on every product card** — the ingredients are shown in full (never truncated) together with the **E-number additives** (E322, E330…) and the allergens, so you can always see exactly what a product is made of.
+- **Suggested shelf life on every scan.** Databases never know the best-before date (it lives on the label, not the barcode), so the card estimates a *typical* shelf life from the product family — "5 days after opening" for fresh dairy, 2 days for raw meat, "while frozen" for frozen goods, up to 12 months for dry staples (Uzbek / English / Russian keywords). The estimate is clearly labelled and the packaging date always wins.
+  - The estimate also **prefills the expiry date** when you tap *Add to inventory* (the form's date field starts at today + the suggested days instead of the generic +7) — from the scanner flow *and* from the in-form database search. Medicine, books and media get no estimate.
 - A "not found" is never a dead end: the barcode profile appears with everything decoded offline, how many databases were asked, plus a one-tap **"Add with this code"** that also teaches the app about that product.
 - Automatic fallback to manual entry + one-tap sample barcodes when there's no camera or permission is denied.
 - Sample codes to try: `3017620422003` (food, + price), `5449000000996`, `7622210449283`, `737628064502`, `0016000275270`, `4005900259615` (beauty), `7613034464927` (pet food), `8996001601242` (products), `093624969556` (music / iTunes), `0305730150200` (medicine / openFDA + RxNav), `9780141036144` (book / Open Library).
@@ -103,6 +106,7 @@ src/
 ├── services/
 │   ├── productLookup.js        # barcode → merged product from 12 sources (family-priority, cached + throttled)
 │   ├── apiKeys.js              # optional retail-catalogue keys (localStorage) + key verification probes
+│   ├── shelfLife.js            # typical shelf-life heuristic per product family (prefills expiry)
 │   ├── barcodeInfo.js          # offline GTIN analysis: symbology, GS1 country, check digit, GTIN variants
 │   └── knowledgeBase.js        # local, self-growing catalogue of everything collected
 └── utils/                      # dateUtils, format helpers

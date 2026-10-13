@@ -1,9 +1,14 @@
-import { useState } from 'react'
+import { useLanguage } from '../../i18n/LanguageContext.jsx'
+import { ProductThumb } from '../ui/ProductThumb.jsx'
+import { Chip } from '../ui/Badge.jsx'
+import { SOURCES, sourceMeta } from '../../services/productLookup.js'
+import { suggestShelfLife } from '../../services/shelfLife.js'
+import { flagEmoji, regionName } from '../../services/barcodeInfo.js'
+import { addDays } from '../../utils/dateUtils.js'
 import {
   BadgeCheck,
   BookOpen,
   CalendarDays,
-  ChevronDown,
   Database,
   Disc3,
   ExternalLink,
@@ -17,11 +22,6 @@ import {
   Tag,
   TriangleAlert,
 } from 'lucide-react'
-import { useLanguage } from '../../i18n/LanguageContext.jsx'
-import { ProductThumb } from '../ui/ProductThumb.jsx'
-import { Chip } from '../ui/Badge.jsx'
-import { SOURCES, sourceMeta } from '../../services/productLookup.js'
-import { flagEmoji, regionName } from '../../services/barcodeInfo.js'
 
 const NUTRI_TONES = {
   a: 'bg-emerald-500 text-white',
@@ -137,8 +137,7 @@ function ScanBadge() {
  * @param {boolean} [props.compact]          condensed variant (add/edit form)
  */
 export function ProductPreview({ product, actions, compact = false }) {
-  const { t, locale } = useLanguage()
-  const [showAllIngredients, setShowAllIngredients] = useState(false)
+  const { t, locale, formatDate } = useLanguage()
 
   if (!product) return null
 
@@ -154,6 +153,8 @@ export function ProductPreview({ product, actions, compact = false }) {
 
   const kindBadge = KIND_BADGES[product.productKind]
   const KindIcon = kindBadge?.icon
+
+  const shelfLife = suggestShelfLife(product)
 
   const nutrients = NUTRIENT_ROWS.map((row) => ({
     ...row,
@@ -187,6 +188,8 @@ export function ProductPreview({ product, actions, compact = false }) {
     product.categories?.length > 0 ||
     product.labels?.length > 0 ||
     product.allergens?.length > 0 ||
+    product.ingredients?.length > 0 ||
+    product.additives?.length > 0 ||
     nutrients.length > 0
 
   return (
@@ -262,6 +265,23 @@ export function ProductPreview({ product, actions, compact = false }) {
         </div>
       </div>
 
+      {/* Shelf-life recommendation — a *typical* estimate, clearly labelled. */}
+      {shelfLife && (
+        <div className="mt-3 rounded-xl bg-teal-50/90 px-3 py-2.5 ring-1 ring-teal-200">
+          <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-teal-700">
+            <CalendarDays className="h-3.5 w-3.5" />
+            {t('product.shelfLife')}
+          </p>
+          <p className="mt-1 text-xs font-semibold text-teal-800">
+            {t(shelfLife.modeKey)} — {t('product.shelfDays', { n: shelfLife.days })}
+          </p>
+          <p className="mt-0.5 text-[11px] text-teal-700/90">
+            {t('product.shelfUntil', { date: formatDate(addDays(shelfLife.days)) })}
+          </p>
+          <p className="mt-1 text-[10px] leading-relaxed text-teal-600/80">{t('product.shelfHint')}</p>
+        </div>
+      )}
+
       {hasDetails && (
         <div className={`mt-3.5 space-y-3 ${compact ? '' : 'rounded-xl bg-white/60 p-3'}`}>
           {facts.length > 0 && (
@@ -332,20 +352,30 @@ export function ProductPreview({ product, actions, compact = false }) {
             </div>
           )}
 
-          {product.ingredients && (
+          {/* Full composition — no truncation, plus the E-number additives. */}
+          {(product.ingredients || product.additives?.length > 0) && (
             <div>
-              <button
-                type="button"
-                onClick={() => setShowAllIngredients((prev) => !prev)}
-                className="flex w-full items-center gap-1.5 text-left text-[10px] font-bold uppercase tracking-wide text-slate-400"
-                aria-expanded={showAllIngredients}
-              >
-                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAllIngredients ? 'rotate-180' : ''}`} />
-                {t('recipes.ingredients')}
-              </button>
-              <p className={`mt-1 text-[11px] leading-relaxed text-slate-500 ${showAllIngredients ? '' : 'line-clamp-3'}`}>
-                {product.ingredients}
+              <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                <FlaskConical className="h-3.5 w-3.5" />
+                {t('product.composition')}
               </p>
+              {product.ingredients && (
+                <p className="text-[11px] leading-relaxed text-slate-600">{product.ingredients}</p>
+              )}
+              {product.additives?.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-slate-400">{t('product.additives')}:</span>
+                  {product.additives.map((additive) => (
+                    <Chip
+                      key={additive}
+                      title={t('product.additives')}
+                      className="bg-amber-50/80 text-amber-700 ring-1 ring-amber-200"
+                    >
+                      {additive}
+                    </Chip>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

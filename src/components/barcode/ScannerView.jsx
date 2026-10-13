@@ -11,6 +11,8 @@ import { useUI } from '../../context/UIContext.jsx'
 import { SAMPLE_BARCODES } from '../../constants/barcodeSamples.js'
 import { digitsOnly, isValidBarcode } from '../../utils/format.js'
 import { fetchProduct, InvalidBarcodeError, ProductNotFoundError, sourcesFor } from '../../services/productLookup.js'
+import { suggestShelfLife } from '../../services/shelfLife.js'
+import { addDays } from '../../utils/dateUtils.js'
 
 /**
  * Full-page scanner: live camera on one side, manual entry + sample codes on
@@ -73,11 +75,15 @@ export function ScannerView() {
 
   const addToInventory = () => {
     if (!result) return
+    // Prefill a sensible expiry from the typical shelf life of this product
+    // family (e.g. "5 days after opening") — the user can change it freely.
+    const shelfLife = suggestShelfLife(result)
     openAddItem({
       name: result.name,
       barcode: result.barcode,
       product: result,
       category: guessCategory(result),
+      expiryDate: shelfLife ? addDays(shelfLife.days) : undefined,
     })
   }
 

@@ -28,6 +28,7 @@ import {
   getCategoryIcon,
 } from '../../constants/categories.js'
 import { addDays, getStatus, toDateInputValue } from '../../utils/dateUtils.js'
+import { suggestShelfLife } from '../../services/shelfLife.js'
 import { digitsOnly, isValidBarcode } from '../../utils/format.js'
 import { StatusPill } from '../ui/Badge.jsx'
 
@@ -117,12 +118,21 @@ export function AddEditItemModal({ open, editing, prefill, onClose }) {
       const found = await lookupProduct(code)
       setProduct(found)
       setLookupState('found')
-      setForm((prev) => ({
-        ...prev,
-        barcode: found.barcode || prev.barcode,
-        // Only fill the name if the user hasn't typed one yet.
-        name: prev.name.trim() ? prev.name : found.name,
-      }))
+      setForm((prev) => {
+        const next = {
+          ...prev,
+          barcode: found.barcode || prev.barcode,
+          // Only fill the name if the user hasn't typed one yet.
+          name: prev.name.trim() ? prev.name : found.name,
+        }
+        // Prefill a typical shelf life (e.g. "5 days after opening") while the
+        // user still has the untouched default date.
+        const shelfLife = suggestShelfLife(found)
+        if (shelfLife && prev.expiryDate === addDays(DEFAULT_EXPIRY_OFFSET)) {
+          next.expiryDate = addDays(shelfLife.days)
+        }
+        return next
+      })
     } catch (error) {
       setProduct(null)
       setLookupState(error?.code === 'not_found' ? 'not-found' : error?.code === 'invalid' ? 'invalid' : 'error')

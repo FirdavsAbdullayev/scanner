@@ -273,6 +273,7 @@ const FIELDS = [
   'categories_tags',
   'labels_tags',
   'allergens_tags',
+  'additives_tags',
   'ingredients_text',
   'ingredients_text_en',
   'nutriscore_grade',
@@ -723,6 +724,7 @@ async function tryCandidates(code, attempt) {
  * @property {string[]} categories
  * @property {string[]} labels
  * @property {string[]} allergens
+ * @property {string[]} additives      E-number / additive tags (E322, E330…)
  * @property {string}   ingredients
  * @property {string}   nutriScore   'a'..'e' or ''
  * @property {number|null} nova      1..4 or null
@@ -763,6 +765,7 @@ function emptyProduct(code, sourceId) {
     categories: [],
     labels: [],
     allergens: [],
+    additives: [],
     ingredients: '',
     nutriScore: '',
     nova: null,
@@ -802,6 +805,7 @@ function normalizeOpenFacts(product, source) {
     categories: parseTags(product.categories_tags, product.categories, 6),
     labels: parseTags(product.labels_tags, null, 6),
     allergens: parseTags(product.allergens_tags, null, 6),
+    additives: parseTags(product.additives_tags, null, 10),
     ingredients: cleanText(pickLocalized(product, 'ingredients_text')),
     nutriScore: validGrade(product.nutriscore_grade_2023 || product.nutriscore_grade),
     nova: validNova(product.nova_group),
@@ -1015,6 +1019,7 @@ function mergeProducts(found) {
     categories: [...base.categories],
     labels: [...base.labels],
     allergens: [...base.allergens],
+    additives: [...base.additives],
     countries: [...base.countries],
     nutriments: { ...base.nutriments },
     sources: found.map((outcome) => outcome.source.id),
@@ -1049,6 +1054,7 @@ function mergeProducts(found) {
     unionInto(merged.categories, product.categories, 6)
     unionInto(merged.labels, product.labels, 6)
     unionInto(merged.allergens, product.allergens, 6)
+    unionInto(merged.additives, product.additives, 12)
     unionInto(merged.countries, product.countries, 3)
 
     for (const key of NUTRIENT_KEYS) {
@@ -1093,6 +1099,7 @@ function completeness(product) {
   if (product.trackCount) score += 0.5
   score += Math.min(product.categories.length, 3) * 0.5
   score += Math.min(product.labels.length + product.allergens.length, 4) * 0.25
+  if (product.additives?.length) score += 0.5
   for (const key of NUTRIENT_KEYS) if (product.nutriments[key] != null) score += 0.5
   return score
 }
