@@ -1,14 +1,19 @@
 import { useState } from 'react'
 import {
   BadgeCheck,
+  BookOpen,
   CalendarDays,
   ChevronDown,
   Database,
+  Disc3,
   ExternalLink,
   Flame,
+  FlaskConical,
   Hash,
   Layers,
+  Pill,
   Sparkles,
+  Stethoscope,
   Tag,
   TriangleAlert,
 } from 'lucide-react'
@@ -32,6 +37,13 @@ const NOVA_TONES = {
   2: 'bg-lime-100 text-lime-700',
   3: 'bg-amber-100 text-amber-700',
   4: 'bg-rose-100 text-rose-700',
+}
+
+/** What kind of thing the barcode turned out to be → badge for the card. */
+const KIND_BADGES = {
+  medicine: { icon: Pill, labelKey: 'productKind.medicine', tone: 'bg-rose-50 text-rose-700 ring-rose-100' },
+  book: { icon: BookOpen, labelKey: 'productKind.book', tone: 'bg-indigo-50 text-indigo-700 ring-indigo-100' },
+  media: { icon: Disc3, labelKey: 'productKind.media', tone: 'bg-violet-50 text-violet-700 ring-violet-100' },
 }
 
 const NUTRIENT_ROWS = [
@@ -131,11 +143,17 @@ export function ProductPreview({ product, actions, compact = false }) {
   if (!product) return null
 
   const numberFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 })
+  const countFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 })
 
   const foundSources = (product.sources?.length ? product.sources : [product.source])
     .map((id) => sourceMeta(id) ?? SOURCES.find((s) => s.id === id))
     .filter(Boolean)
-  const linkSources = foundSources.filter((source) => source.network)
+  // Only sources with a per-product page get a link (the enrichers — Open
+  // Prices, RxNav — contribute data but have no product URL of their own).
+  const linkSources = foundSources.filter((source) => source.network && typeof source.productUrl === 'function')
+
+  const kindBadge = KIND_BADGES[product.productKind]
+  const KindIcon = kindBadge?.icon
 
   const nutrients = NUTRIENT_ROWS.map((row) => ({
     ...row,
@@ -143,9 +161,25 @@ export function ProductPreview({ product, actions, compact = false }) {
   })).filter((row) => Number.isFinite(row.value))
 
   const facts = [
+    product.genre && { icon: Disc3, label: t('product.genre'), value: product.genre },
+    product.trackCount != null && {
+      icon: Hash,
+      label: t('product.tracks'),
+      value: countFormat.format(product.trackCount),
+    },
     product.releaseDate && { icon: CalendarDays, label: t('product.releaseDate'), value: product.releaseDate },
     product.format && { icon: Layers, label: t('product.format'), value: product.format },
     product.label && { icon: Tag, label: t('product.label'), value: product.label },
+    product.publisher && { icon: BookOpen, label: t('product.publisher'), value: product.publisher },
+    product.pages != null && { icon: BookOpen, label: t('product.pages'), value: countFormat.format(product.pages) },
+    product.dosageForm && { icon: Pill, label: t('product.dosageForm'), value: product.dosageForm },
+    product.activeIngredients && {
+      icon: FlaskConical,
+      label: t('product.activeIngredients'),
+      value: product.activeIngredients,
+    },
+    product.drugStatus && { icon: Stethoscope, label: t('product.drugStatus'), value: product.drugStatus },
+    product.price && { icon: Tag, label: t('product.price'), value: formatPrice(product.price, locale) },
   ].filter(Boolean)
 
   const hasDetails =
@@ -170,6 +204,14 @@ export function ProductPreview({ product, actions, compact = false }) {
           <h3 className="text-balance text-sm font-bold leading-snug text-slate-900">{product.name}</h3>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {kindBadge && (
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ${kindBadge.tone}`}
+              >
+                <KindIcon className="h-3 w-3" />
+                {t(kindBadge.labelKey)}
+              </span>
+            )}
             {product.brand && <Chip className="bg-white/80 text-slate-600">{product.brand}</Chip>}
             {product.quantity && <Chip className="bg-white/80 text-slate-600">{product.quantity}</Chip>}
             {product.nutriScore && (
@@ -319,7 +361,11 @@ export function ProductPreview({ product, actions, compact = false }) {
           {linkSources.map((source) => (
             <a
               key={source.id}
-              href={source.productUrl(product.barcode)}
+              href={
+                source.id === product.source && product.externalUrl
+                  ? product.externalUrl
+                  : source.productUrl(product.barcode)
+              }
               target="_blank"
               rel="noreferrer noopener"
               className="inline-flex items-center gap-1 font-semibold text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
@@ -335,6 +381,21 @@ export function ProductPreview({ product, actions, compact = false }) {
       {actions && <div className="mt-4 flex flex-wrap gap-2">{actions}</div>}
     </div>
   )
+}
+
+/** "4.45 €" (plus the shop, when the crowd-sourced price knows one). */
+function formatPrice(price, locale) {
+  let amount
+  try {
+    amount = new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: price.currency || 'EUR',
+      maximumFractionDigits: 2,
+    }).format(price.amount)
+  } catch {
+    amount = `${price.amount} ${price.currency}`
+  }
+  return price.store ? `${amount} · ${price.store}` : amount
 }
 
 /** Not-found / error notice shown instead of a product card. */

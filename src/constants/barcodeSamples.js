@@ -1,9 +1,9 @@
 /**
- * Well-known barcodes that exist in the Open Food Facts database.
+ * Well-known barcodes that resolve against the open databases.
  * Used by the scanner page as one-tap demos, and as a fallback for testing
  * when no physical product is at hand.
  *
- * Keep these to real EAN-13 codes with solid OFF coverage.
+ * Keep these to real codes with solid coverage in the source named in the hint.
  */
 export const SAMPLE_BARCODES = [
   {
@@ -59,7 +59,19 @@ export const SAMPLE_BARCODES = [
   {
     code: '093624969556',
     label: 'Nirvana',
-    hint: 'Nevermind, vinyl — looked up in MusicBrainz',
-    emoji: '🎵',
+    hint: 'Nevermind — looked up in iTunes and MusicBrainz',
+    emoji: '🎬',
+  },
+  {
+    code: '0305730150200',
+    label: 'Advil',
+    hint: 'Ibuprofen tablets — openFDA + RxNav',
+    emoji: '💊',
+  },
+  {
+    code: '9780141036144',
+    label: '1984',
+    hint: 'George Orwell — Open Library + Google Books (ISBN)',
+    emoji: '📚',
   },
 ]

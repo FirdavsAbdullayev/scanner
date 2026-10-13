@@ -213,6 +213,27 @@ export function analyzeBarcode(rawCode) {
   }
 }
 
+/**
+ * Alternative spellings of the *same* GTIN.
+ *
+ * A product can be indexed as a 12-digit UPC-A, a 13-digit EAN-13 or a 14-digit
+ * GTIN-14 depending on who stored it; the forms differ only by leading zeros.
+ * The Open Facts family normalises these internally, so this is only needed for
+ * the other databases (openFDA, iTunes, retail catalogues).
+ *
+ * @param {string|number} rawCode
+ * @returns {string[]} the code itself first, then at most one alternative
+ */
+export function gtinVariants(rawCode) {
+  const code = digitsOnly(rawCode)
+  if (!code) return []
+  const out = [code]
+  if (code.length === 13 && code.startsWith('0')) out.push(code.slice(1)) // EAN-13 → UPC-A
+  else if (code.length === 12) out.push(`0${code}`) // UPC-A → EAN-13
+  else if (code.length === 14 && code.startsWith('0')) out.push(code.slice(1)) // GTIN-14 → EAN-13
+  return out
+}
+
 /** GS1 mod-10 check-digit verification (works for EAN-8/13, UPC-A, GTIN-14). */
 export function hasValidCheckDigit(code) {
   if (!/^\d{8,14}$/.test(code)) return false

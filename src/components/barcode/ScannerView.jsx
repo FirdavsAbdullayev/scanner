@@ -3,17 +3,18 @@ import { Hash, LoaderCircle, Plus, ScanBarcode, ScanSearch, Search, Sparkles } f
 import { CameraPanel } from './CameraPanel.jsx'
 import { ProductPreview, LookupNotice } from './ProductPreview.jsx'
 import { BarcodeProfile } from './BarcodeProfile.jsx'
+import { AdvancedSources } from './AdvancedSources.jsx'
 import { useBarcodeScanner } from './useBarcodeScanner.js'
 import { EmptyState } from '../ui/EmptyState.jsx'
 import { useLanguage } from '../../i18n/LanguageContext.jsx'
 import { useUI } from '../../context/UIContext.jsx'
 import { SAMPLE_BARCODES } from '../../constants/barcodeSamples.js'
 import { digitsOnly, isValidBarcode } from '../../utils/format.js'
-import { fetchProduct, InvalidBarcodeError, ProductNotFoundError, SOURCES } from '../../services/productLookup.js'
+import { fetchProduct, InvalidBarcodeError, ProductNotFoundError, sourcesFor } from '../../services/productLookup.js'
 
 /**
  * Full-page scanner: live camera on one side, manual entry + sample codes on
- * the other, with the Open Food Facts result rendered underneath.
+ * the other, with the automatically collected product rendered underneath.
  *
  * A successful scan or a manual lookup both land in `result`, and the
  * "Add to inventory" button forwards it to the add-product modal.
@@ -176,6 +177,9 @@ export function ScannerView() {
               ))}
             </div>
           </div>
+
+          {/* Optional retail catalogues (API keys) */}
+          <AdvancedSources />
         </div>
 
         {/* Result area */}
@@ -190,7 +194,7 @@ export function ScannerView() {
                   <p className="text-sm font-semibold text-slate-600">{t('scanner.collecting')}</p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {SOURCES.map((source) => (
+                  {sourcesFor(lookupCode).map((source) => (
                     <span
                       key={source.id}
                       className="inline-flex animate-pulse items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500 ring-1 ring-slate-100"
@@ -223,7 +227,7 @@ export function ScannerView() {
             {state === 'not-found' && (
               <BarcodeProfile
                 code={lookupCode}
-                checked={SOURCES.map((source) => source.id)}
+                checked={sourcesFor(lookupCode).map((source) => source.id)}
                 tone="warning"
                 title={t('form.notFound')}
                 description={t('form.notFoundHint')}
@@ -243,7 +247,7 @@ export function ScannerView() {
             {state === 'error' && (
               <BarcodeProfile
                 code={lookupCode}
-                checked={SOURCES.map((source) => source.id)}
+                checked={sourcesFor(lookupCode).map((source) => source.id)}
                 tone="error"
                 title={t('form.error')}
                 description={t('form.errorHint')}

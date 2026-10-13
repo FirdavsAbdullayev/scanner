@@ -130,8 +130,8 @@ export function ItemCard({ item, index = 0 }) {
             </Chip>
           )}
           {item.product && (
-            <Chip icon={Hash} title={t('item.fromOff')} className="bg-emerald-50 text-emerald-600">
-              <span className="truncate">{item.product.categories?.[0] ?? t('item.fromOff')}</span>
+            <Chip icon={Hash} title={t('item.fromDatabase')} className="bg-emerald-50 text-emerald-600">
+              <span className="truncate">{item.product.categories?.[0] ?? t('item.fromDatabase')}</span>
             </Chip>
           )}
         </div>
