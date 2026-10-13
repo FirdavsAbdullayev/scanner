@@ -1,0 +1,268 @@
+@import 'tailwindcss';
+
+/* ------------------------------------------------------------------ *
+ * Design tokens
+ * ------------------------------------------------------------------ */
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Fresh → emerald / teal */
+  --color-fresh-50: #ecfdf5;
+  --color-fresh-100: #d1fae5;
+  --color-fresh-500: #10b981;
+  --color-fresh-600: #059669;
+  --color-fresh-700: #047857;
+
+  /* Expiring soon → amber */
+  --color-soon-50: #fffbeb;
+  --color-soon-100: #fef3c7;
+  --color-soon-500: #f59e0b;
+  --color-soon-600: #d97706;
+
+  /* Expired → rose */
+  --color-gone-50: #fff1f2;
+  --color-gone-100: #ffe4e6;
+  --color-gone-500: #f43f5e;
+  --color-gone-600: #e11d48;
+}
+
+/* ------------------------------------------------------------------ *
+ * Base
+ * ------------------------------------------------------------------ */
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    font-family: var(--font-sans);
+    color: #1e293b; /* slate-800 */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+
+    /* Soft "mesh" background — gives the glassmorphism something to blur */
+    background-color: #f1f5f9;
+    background-image:
+      radial-gradient(1100px 620px at 6% -12%, rgba(16, 185, 129, 0.22) 0%, transparent 62%),
+      radial-gradient(900px 540px at 102% -6%, rgba(20, 184, 166, 0.2) 0%, transparent 58%),
+      radial-gradient(820px 620px at 46% 118%, rgba(245, 158, 11, 0.16) 0%, transparent 62%),
+      radial-gradient(700px 500px at 96% 108%, rgba(244, 63, 94, 0.1) 0%, transparent 60%);
+    background-attachment: fixed;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+  }
+
+  /* Nicer, on-brand focus ring everywhere */
+  :focus-visible {
+    outline: 2px solid #0d9488;
+    outline-offset: 2px;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Reusable utilities
+ * ------------------------------------------------------------------ */
+@layer utilities {
+  /* Frosted glass surface used by every card, modal and panel */
+  .glass {
+    background-color: rgba(255, 255, 255, 0.78);
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+  }
+
+  .glass-strong {
+    background-color: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Layered, tinted shadow that reads well on the mesh background */
+  .shadow-soft {
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 8px 24px -8px rgba(15, 23, 42, 0.12),
+      0 24px 48px -24px rgba(15, 23, 42, 0.14);
+  }
+
+  .animate-fade-in-up {
+    animation: aet-fade-in-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .animate-pop-in {
+    animation: aet-pop-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .animate-scale-in {
+    animation: aet-scale-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .animate-fade-in {
+    animation: aet-fade-in 0.25s ease-out both;
+  }
+
+  .animate-slide-in-left {
+    animation: aet-slide-in-left 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .animate-pulse-ring {
+    animation: aet-pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animate-shimmer {
+    background-image: linear-gradient(
+      100deg,
+      rgba(255, 255, 255, 0) 20%,
+      rgba(255, 255, 255, 0.75) 50%,
+      rgba(255, 255, 255, 0) 80%
+    );
+    background-size: 220% 100%;
+    animation: aet-shimmer 1.4s linear infinite;
+  }
+
+  .animate-scanline {
+    animation: aet-scanline 2.2s ease-in-out infinite;
+  }
+
+  .animate-float {
+    animation: aet-float 6s ease-in-out infinite;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Keyframes
+ * ------------------------------------------------------------------ */
+@keyframes aet-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes aet-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes aet-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes aet-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes aet-slide-in-left {
+  from {
+    opacity: 0;
+    transform: translate3d(-16px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes aet-pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(245, 158, 11, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+  }
+}
+
+@keyframes aet-shimmer {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -80% 0;
+  }
+}
+
+@keyframes aet-scanline {
+  0% {
+    top: 8%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    top: 92%;
+    opacity: 0;
+  }
+}
+
+@keyframes aet-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
