@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import {
   BadgeCheck,
+  CalendarDays,
   ChevronDown,
+  Database,
   ExternalLink,
   Flame,
   Hash,
@@ -14,6 +16,7 @@ import { useLanguage } from '../../i18n/LanguageContext.jsx'
 import { ProductThumb } from '../ui/ProductThumb.jsx'
 import { Chip } from '../ui/Badge.jsx'
 import { SOURCES, sourceMeta } from '../../services/productLookup.js'
+import { flagEmoji, regionName } from '../../services/barcodeInfo.js'
 
 const NUTRI_TONES = {
   a: 'bg-emerald-500 text-white',
@@ -42,6 +45,73 @@ const NUTRIENT_ROWS = [
   { key: 'salt', labelKey: 'product.salt', unit: 'g' },
 ]
 
+/** Symbology → i18n key. */
+const TYPE_KEYS = {
+  ean8: 'barcode.typeEan8',
+  upca: 'barcode.typeUpca',
+  ean13: 'barcode.typeEan13',
+  gtin14: 'barcode.typeGtin14',
+  isbn: 'barcode.typeIsbn',
+  issn: 'barcode.typeIssn',
+  unknown: 'barcode.typeUnknown',
+}
+
+/** What the code identifies → i18n key. */
+const KIND_KEYS = {
+  product: 'barcode.kindProduct',
+  book: 'barcode.kindBook',
+  periodical: 'barcode.kindPeriodical',
+  internal: 'barcode.kindInternal',
+  coupon: 'barcode.kindCoupon',
+}
+
+/**
+ * Small row of chips describing the barcode itself — purely offline facts
+ * (symbology, what it identifies, GS1 country of origin, check-digit validity).
+ *
+ * @param {object} props
+ * @param {import('../../services/barcodeInfo.js').BarcodeInfo} props.info
+ */
+export function BarcodeMeta({ info, className = '' }) {
+  const { t, locale } = useLanguage()
+  if (!info) return null
+
+  return (
+    <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
+      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+        <ScanBadge />
+        {t(TYPE_KEYS[info.type] ?? 'barcode.typeUnknown')}
+      </span>
+      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+        {t(KIND_KEYS[info.kind] ?? 'barcode.kindProduct')}
+      </span>
+      {info.countryCode && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+          <span aria-hidden="true">{flagEmoji(info.countryCode)}</span>
+          {regionName(info.countryCode, locale, info.countryCode)}
+        </span>
+      )}
+      {info.hasCheckDigit &&
+        (info.valid ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-100">
+            <BadgeCheck className="h-3 w-3" />
+            {t('barcode.valid')}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-100">
+            <TriangleAlert className="h-3 w-3" />
+            {t('barcode.invalid')}
+          </span>
+        ))}
+    </div>
+  )
+}
+
+/** Tiny inline glyph so the type chip doesn't need a second icon import. */
+function ScanBadge() {
+  return <Hash className="h-3 w-3" />
+}
+
 /**
  * Renders a product that was automatically enriched from the open databases.
  *
@@ -65,13 +135,21 @@ export function ProductPreview({ product, actions, compact = false }) {
   const foundSources = (product.sources?.length ? product.sources : [product.source])
     .map((id) => sourceMeta(id) ?? SOURCES.find((s) => s.id === id))
     .filter(Boolean)
+  const linkSources = foundSources.filter((source) => source.network)
 
   const nutrients = NUTRIENT_ROWS.map((row) => ({
     ...row,
     value: product.nutriments?.[row.key],
   })).filter((row) => Number.isFinite(row.value))
 
+  const facts = [
+    product.releaseDate && { icon: CalendarDays, label: t('product.releaseDate'), value: product.releaseDate },
+    product.format && { icon: Layers, label: t('product.format'), value: product.format },
+    product.label && { icon: Tag, label: t('product.label'), value: product.label },
+  ].filter(Boolean)
+
   const hasDetails =
+    facts.length > 0 ||
     product.categories?.length > 0 ||
     product.labels?.length > 0 ||
     product.allergens?.length > 0 ||
@@ -132,12 +210,30 @@ export function ProductPreview({ product, actions, compact = false }) {
                 {t(source.labelKey)}
               </span>
             ))}
+            {product.fromKnowledgeBase && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-teal-700 ring-1 ring-teal-100">
+                <Database className="h-3 w-3" />
+                {t('product.fromMemory')}
+              </span>
+            )}
           </div>
         </div>
       </div>
 
       {hasDetails && (
         <div className={`mt-3.5 space-y-3 ${compact ? '' : 'rounded-xl bg-white/60 p-3'}`}>
+          {facts.length > 0 && (
+            <dl className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+              {facts.map((fact) => (
+                <div key={fact.label} className="flex items-center gap-1.5">
+                  <fact.icon className="h-3.5 w-3.5 text-emerald-600/70" />
+                  <dt className="font-semibold text-slate-400">{fact.label}:</dt>
+                  <dd className="font-medium text-slate-600">{fact.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+
           {product.categories?.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5">
               <Layers className="h-3.5 w-3.5 shrink-0 text-emerald-600/70" />
@@ -213,28 +309,27 @@ export function ProductPreview({ product, actions, compact = false }) {
         </div>
       )}
 
-      {/* Footer: barcode + source links */}
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-slate-400">
-        <span className="inline-flex items-center gap-1 font-mono">
-          <Hash className="h-3.5 w-3.5" />
-          {product.barcode}
-        </span>
-        {foundSources.map((source) => (
-          <a
-            key={source.id}
-            href={source.productUrl(product.barcode)}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="inline-flex items-center gap-1 font-semibold text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
-          >
-            {source.emoji} {t('product.viewSource')}
-            <ExternalLink className="h-3 w-3" />
-          </a>
-        ))}
-        <span className="inline-flex items-center gap-1 text-emerald-700/70">
-          <BadgeCheck className="h-3.5 w-3.5" />
-          {t('product.verified')}
-        </span>
+      {/* Footer: barcode facts + source links */}
+      <div className="mt-3 space-y-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-slate-400">
+          <span className="inline-flex items-center gap-1 font-mono">
+            <Hash className="h-3.5 w-3.5" />
+            {product.barcode}
+          </span>
+          {linkSources.map((source) => (
+            <a
+              key={source.id}
+              href={source.productUrl(product.barcode)}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex items-center gap-1 font-semibold text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
+            >
+              {source.emoji} {t('product.viewSource')}
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          ))}
+        </div>
+        <BarcodeMeta info={product.info} />
       </div>
 
       {actions && <div className="mt-4 flex flex-wrap gap-2">{actions}</div>}

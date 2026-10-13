@@ -3,6 +3,7 @@ import { createSeedItems } from '../data/seedData.js'
 import { compareByExpiry, daysUntil, getStatus, STATUS } from '../utils/dateUtils.js'
 import { cleanText, uid } from '../utils/format.js'
 import { fetchProduct, ProductNotFoundError, InvalidBarcodeError } from '../services/productLookup.js'
+import { rememberManualProduct, rememberProduct } from '../services/knowledgeBase.js'
 
 const STORAGE_KEY = 'aet:inventory:v1'
 const CONSUMED_RETENTION_MS = 1000 * 60 * 60 * 24 * 30 // keep consumed rows for 30 days
@@ -114,6 +115,7 @@ export function useInventory() {
       consumed: false,
     })
     setItems((prev) => [item, ...prev])
+    teachKnowledgeBase(item)
     return item
   }, [])
 
@@ -126,6 +128,7 @@ export function useInventory() {
         return updated
       }),
     )
+    if (updated) teachKnowledgeBase(updated)
     return updated
   }, [])
 
@@ -150,7 +153,7 @@ export function useInventory() {
     return item
   }, [])
 
-  /** Attach (or clear) a fetched Open Food Facts payload. */
+  /** Attach (or clear) a collected product payload. */
   const setItemProduct = useCallback((id, product) => {
     setItems((prev) => prev.map((row) => (row.id === id ? { ...row, product } : row)))
   }, [])
@@ -240,4 +243,14 @@ export function useInventory() {
 
 function blank() {
   return { total: 0, fresh: 0, expiringSoon: 0, expired: 0 }
+}
+
+/**
+ * Feed the local knowledge base so the project keeps learning: the next time
+ * this barcode is scanned, the app already has something to show.
+ */
+function teachKnowledgeBase(item) {
+  if (!item?.barcode) return
+  if (item.product) rememberProduct(item.barcode, item.product, 'manual')
+  else rememberManualProduct(item.barcode, { name: item.name, category: item.category })
 }

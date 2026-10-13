@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Hash, LoaderCircle, Plus, ScanBarcode, ScanSearch, Search, Sparkles } from 'lucide-react'
 import { CameraPanel } from './CameraPanel.jsx'
 import { ProductPreview, LookupNotice } from './ProductPreview.jsx'
+import { BarcodeProfile } from './BarcodeProfile.jsx'
 import { useBarcodeScanner } from './useBarcodeScanner.js'
 import { EmptyState } from '../ui/EmptyState.jsx'
 import { useLanguage } from '../../i18n/LanguageContext.jsx'
@@ -220,23 +221,13 @@ export function ScannerView() {
             )}
 
             {state === 'not-found' && (
-              <div className="space-y-3">
-                <LookupNotice tone="warning" title={t('form.notFound')} description={t('form.notFoundHint')} />
-                <button
-                  type="button"
-                  onClick={() => addWithCode(lookupCode)}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition hover:brightness-110 active:scale-[0.99]"
-                >
-                  <Plus className="h-4 w-4" strokeWidth={2.6} />
-                  <span>{t('scanner.addWithCode')}</span>
-                  {lookupCode && <span className="font-mono text-xs text-white/80">{lookupCode}</span>}
-                </button>
-              </div>
-            )}
-            {state === 'error' && (
-              <div className="space-y-3">
-                <LookupNotice tone="error" title={t('form.error')} description={t('form.errorHint')} />
-                {isValidBarcode(lookupCode) && (
+              <BarcodeProfile
+                code={lookupCode}
+                checked={SOURCES.map((source) => source.id)}
+                tone="warning"
+                title={t('form.notFound')}
+                description={t('form.notFoundHint')}
+                actions={
                   <button
                     type="button"
                     onClick={() => addWithCode(lookupCode)}
@@ -244,10 +235,32 @@ export function ScannerView() {
                   >
                     <Plus className="h-4 w-4" strokeWidth={2.6} />
                     <span>{t('scanner.addWithCode')}</span>
-                    <span className="font-mono text-xs text-white/80">{lookupCode}</span>
+                    {lookupCode && <span className="font-mono text-xs text-white/80">{lookupCode}</span>}
                   </button>
-                )}
-              </div>
+                }
+              />
+            )}
+            {state === 'error' && (
+              <BarcodeProfile
+                code={lookupCode}
+                checked={SOURCES.map((source) => source.id)}
+                tone="error"
+                title={t('form.error')}
+                description={t('form.errorHint')}
+                actions={
+                  isValidBarcode(lookupCode) && (
+                    <button
+                      type="button"
+                      onClick={() => addWithCode(lookupCode)}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition hover:brightness-110 active:scale-[0.99]"
+                    >
+                      <Plus className="h-4 w-4" strokeWidth={2.6} />
+                      <span>{t('scanner.addWithCode')}</span>
+                      <span className="font-mono text-xs text-white/80">{lookupCode}</span>
+                    </button>
+                  )
+                }
+              />
             )}
             {state === 'invalid' && <LookupNotice tone="warning" title={t('scanner.invalid')} />}
 

@@ -2,7 +2,7 @@
 
 **Muzlatgich va Mahsulotlar Muddati Nazoratchisi** — a modern, responsive expiry-tracking dashboard for your fridge, pantry and medicine cabinet.
 
-Built with **React 19 + Vite**, **Tailwind CSS v4** and **lucide-react**, with real barcode scanning (**@zxing/browser**) and automatic product intelligence gathered live from the free **Open Facts** family — [Open Food Facts](https://world.openfoodfacts.org/), [Open Beauty Facts](https://world.openbeautyfacts.org/), [Open Products Facts](https://world.openproductsfacts.org/) and [Open Pet Food Facts](https://world.openpetfoodfacts.org/).
+Built with **React 19 + Vite**, **Tailwind CSS v4** and **lucide-react**, with real barcode scanning (**@zxing/browser**) and automatic product intelligence gathered live from the free **Open Facts** family ([Open Food Facts](https://world.openfoodfacts.org/), [Open Beauty Facts](https://world.openbeautyfacts.org/), [Open Products Facts](https://world.openproductsfacts.org/), [Open Pet Food Facts](https://world.openpetfoodfacts.org/)), [MusicBrainz](https://musicbrainz.org/) for media, plus offline GTIN analysis and a self-growing local knowledge base.
 
 ---
 
@@ -23,11 +23,15 @@ Built with **React 19 + Vite**, **Tailwind CSS v4** and **lucide-react**, with r
 - **Live camera scanning** with a scan reticle, beep-style flash feedback and duplicate-read debouncing.
 - Tuned for real 1D barcodes: a high-resolution "environment" stream with continuous autofocus, the `TRY_HARDER` decode hint, a 160 ms attempt interval, and a bonus native `BarcodeDetector` pass on Android Chrome.
 - Flashlight (torch) and camera-flip buttons appear automatically when the device supports them.
-- **Every scanned code is queried against four open databases at once** (food, beauty, general products, pet food) and the results are merged, so each item automatically gets its name, brand, quantity, photo, categories, labels, allergens and per-100 g nutrition — even for non-food items.
-- The collected record is stored with the inventory item, so it is available offline afterwards.
+- **Any barcode, any product — three collection layers:**
+  1. **Open databases, queried in parallel.** Open Food Facts, Open Beauty Facts, Open Products Facts, Open Pet Food Facts and MusicBrainz. The hits are merged (the most complete record wins, the others fill the gaps), so each item automatically gets its name, brand, quantity, photo, categories, labels, allergens, allergens-safe nutrition per 100 g, Nutri-Score, NOVA and — for media — release date, format and label.
+  2. **Offline barcode analysis.** Every code is decoded locally: symbology (EAN-8 / UPC-A / EAN-13 / GTIN-14 / ISBN / ISSN), the **GS1 country of origin** of the manufacturer, and the **check digit** is verified. This works with no network at all, so even a product no database has ever seen still shows a truthful "barcode profile".
+  3. **A local knowledge base that keeps learning.** Everything ever looked up — or typed in by hand — is remembered in `localStorage`, so repeat scans resolve instantly and offline, and the catalogue grows the more you scan.
+- A "not found" is never a dead end: the barcode profile appears with everything decoded offline, plus a one-tap **"Add with this code"** that also teaches the app about that product.
 - Automatic fallback to manual entry + one-tap sample barcodes when there's no camera or permission is denied.
-- Any scanned/typed barcode can be added to the inventory even when no database has a record of it (typical for new or local products) — the code is kept and the rest is filled in by hand.
-- Sample codes to try: `3017620422003`, `5449000000996`, `7622210449283`, `737628064502`, `0016000275270`, `4005900259615` (beauty), `7613034464927` (pet food), `8996001601242` (products).
+- Sample codes to try: `3017620422003`, `5449000000996`, `7622210449283`, `737628064502`, `0016000275270`, `4005900259615` (beauty), `7613034464927` (pet food), `8996001601242` (products), `093624969556` (music / MusicBrainz).
+
+> MusicBrainz throttles clients that don't identify themselves, and a browser can't set a custom `User-Agent`; if it refuses, the lookup simply falls back to the other sources.
 
 ### AI Smart Kitchen
 - One click analyses the items expiring soonest and suggests **2–3 recipes** with time, servings, difficulty, ingredients and step-by-step instructions.
@@ -66,7 +70,7 @@ src/
 │   ├── layout/                 # Sidebar, Navbar, MobileNav, LanguageSwitcher
 │   ├── dashboard/              # StatCard, ExpiryTimeline, CategoryBreakdown, AttentionList
 │   ├── inventory/              # CategoryTabs, InventoryToolbar, ItemCard, AddEditItemModal
-│   ├── barcode/                # useBarcodeScanner, CameraPanel, ProductPreview, ScannerView
+│   ├── barcode/                # useBarcodeScanner, CameraPanel, ProductPreview, BarcodeProfile, ScannerView
 │   ├── recipes/                # RecipesView, RecipeCard, AnalyzingLoader
 │   └── ui/                     # Modal, Badge, Toasts, EmptyState, ProductThumb, …
 ├── constants/                  # categories, barcode samples
@@ -75,7 +79,10 @@ src/
 ├── hooks/                      # useInventory, useLocalStorage, useToast
 ├── i18n/                       # uz.js, en.js, ru.js, LanguageContext
 ├── recipes/                    # recipeTemplates, recipeSignals, recipeEngine
-├── services/productLookup.js   # barcode → merged product from 4 open databases (cached + throttled)
+├── services/
+│   ├── productLookup.js        # barcode → merged product from 5 open databases (cached + throttled)
+│   ├── barcodeInfo.js          # offline GTIN analysis: symbology, GS1 country, check digit
+│   └── knowledgeBase.js        # local, self-growing catalogue of everything collected
 └── utils/                      # dateUtils, format helpers
 ```
 

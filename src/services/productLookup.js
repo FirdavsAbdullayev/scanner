@@ -1,28 +1,30 @@
 /**
- * Multi-source product lookup — "automatic product intelligence".
+ * Universal product lookup — "automatic product intelligence".
  *
- * A single barcode can be described by several public, free, CORS-enabled
- * databases that all share the same Open Facts API shape:
+ * Goal: *any* barcode, *any* product, always something useful.
  *
- *   - Open Food Facts    → food & drinks
- *   - Open Beauty Facts  → cosmetics & hygiene
- *   - Open Products Facts→ everything else (household, electronics…)
- *   - Open Pet Food Facts→ pet food
+ * Layer 1 — open databases (queried in parallel, different hosts):
+ *   - Open Food Facts     → food & drinks
+ *   - Open Beauty Facts   → cosmetics & hygiene
+ *   - Open Products Facts → everything else (household, electronics…)
+ *   - Open Pet Food Facts → pet food
+ *   - MusicBrainz         → music / film releases (by barcode, best-effort:
+ *                           it throttles anonymous clients, so failures are silent)
  *
- * We query all of them at once (they are different hosts, so parallelism is
- * polite), then merge whatever came back into one enriched record. That means
- * *any* scanned product gets as much information as the open databases know
- * about it — not just food.
+ * Layer 2 — offline analysis (`barcodeInfo.js`): symbology, GS1 country of
+ *   origin and check-digit validation. Always available, even offline.
  *
- * Docs: https://openfoodfacts.github.io/openfoodfacts-server/api/
+ * Layer 3 — local knowledge base (`knowledgeBase.js`): everything ever looked
+ *   up or entered by hand is remembered, so repeat scans answer instantly.
  *
- * Good-citizen rules kept from the single-source version:
- *   - cache every lookup (positive *and* negative) for the session,
- *   - de-duplicate concurrent requests for the same barcode,
- *   - throttle per host (the public API asks for <=100 req/min per host).
+ * Good-citizen rules: results are cached (positive *and* negative), concurrent
+ * requests for the same barcode are de-duplicated, and requests are throttled
+ * per host (the public APIs ask for <=100 req/min; MusicBrainz asks for ~1/s).
  */
 
 import { cleanText, digitsOnly, isValidBarcode } from '../utils/format.js'
+import { analyzeBarcode } from './barcodeInfo.js'
+import { recallProduct, rememberProduct } from './knowledgeBase.js'
 
 /** Databases we consult, in preference order (food wins ties). */
 export const SOURCES = [
@@ -31,6 +33,8 @@ export const SOURCES = [
     host: 'world.openfoodfacts.org',
     labelKey: 'source.food',
     emoji: '🍎',
+    family: 'openfacts',
+    network: true,
     productUrl: (code) => `https://world.openfoodfacts.org/product/${code}`,
   },
   {
@@ -38,6 +42,8 @@ export const SOURCES = [
     host: 'world.openbeautyfacts.org',
     labelKey: 'source.beauty',
     emoji: '🧴',
+    family: 'openfacts',
+    network: true,
     productUrl: (code) => `https://world.openbeautyfacts.org/product/${code}`,
   },
   {
@@ -45,6 +51,8 @@ export const SOURCES = [
     host: 'world.openproductsfacts.org',
     labelKey: 'source.products',
     emoji: '📦',
+    family: 'openfacts',
+    network: true,
     productUrl: (code) => `https://world.openproductsfacts.org/product/${code}`,
   },
   {
@@ -52,11 +60,28 @@ export const SOURCES = [
     host: 'world.openpetfoodfacts.org',
     labelKey: 'source.petfood',
     emoji: '🐾',
+    family: 'openfacts',
+    network: true,
     productUrl: (code) => `https://world.openpetfoodfacts.org/product/${code}`,
+  },
+  {
+    id: 'musicbrainz',
+    host: 'musicbrainz.org',
+    labelKey: 'source.music',
+    emoji: '🎵',
+    family: 'musicbrainz',
+    network: true,
+    minInterval: 1100, // MusicBrainz asks for ~1 request/second
+    productUrl: (code) => `https://musicbrainz.org/search?query=barcode%3A${code}&type=release`,
   },
 ]
 
-/** Fields we ask every database for. Unknown fields are simply ignored. */
+/** Non-network "sources" (records the app collected itself). */
+const OFFLINE_SOURCES = {
+  manual: { id: 'manual', labelKey: 'source.manual', emoji: '📝', network: false },
+}
+
+/** Fields we ask every Open Facts database for. Unknown fields are ignored. */
 const FIELDS = [
   'code',
   'product_name',
@@ -96,7 +121,7 @@ const NUTRIENT_MAP = {
 }
 const NUTRIENT_KEYS = Object.keys(NUTRIENT_MAP)
 
-/** Minimum gap between two calls to the same host (ms). */
+/** Default minimum gap between two calls to the same host (ms). */
 const MIN_INTERVAL = 160
 
 const cache = new Map() // barcode -> merged product | null
@@ -120,17 +145,17 @@ export class InvalidBarcodeError extends Error {
   }
 }
 
-/** Meta for a source id (used by the UI to render badges). */
+/** Metadata for a source id (used by the UI to render badges). */
 export function sourceMeta(id) {
-  return SOURCES.find((source) => source.id === id) ?? null
+  return SOURCES.find((source) => source.id === id) ?? OFFLINE_SOURCES[id] ?? null
 }
 
 /** Serialise + throttle requests *per host*. */
-function scheduleOn(host, task) {
+function scheduleOn(host, interval, task) {
   if (!hostQueues.has(host)) hostQueues.set(host, { tail: Promise.resolve(), lastAt: 0 })
   const queue = hostQueues.get(host)
   const run = queue.tail.then(async () => {
-    const wait = Math.max(0, MIN_INTERVAL - (Date.now() - queue.lastAt))
+    const wait = Math.max(0, interval - (Date.now() - queue.lastAt))
     if (wait > 0) await sleep(wait)
     queue.lastAt = Date.now()
     return task()
@@ -152,7 +177,7 @@ function sleep(ms) {
  * @param {string|number} barcode
  * @param {{ signal?: AbortSignal }} [options]
  * @returns {Promise<NormalizedProduct>}
- * @throws {InvalidBarcodeError} when the code isn't 6–14 digits
+ * @throws {InvalidBarcodeError} when the code isn't a plausible GTIN
  * @throws {ProductNotFoundError} when no source knows the code
  * @throws {Error} when every source failed (e.g. offline)
  */
@@ -162,16 +187,36 @@ export async function fetchProduct(barcode, options = {}) {
 
   if (cache.has(code)) {
     const hit = cache.get(code)
-    if (hit === null) throw new ProductNotFoundError(code)
-    return hit
+    if (hit !== null) return hit
+    // A previous miss — but the user may have taught us about it since.
+    const remembered = recall(code)
+    if (remembered) {
+      cache.set(code, remembered)
+      return remembered
+    }
+    throw new ProductNotFoundError(code)
   }
   if (inFlight.has(code)) return inFlight.get(code)
 
-  const promise = lookupAll(code, options)
-    .then((product) => {
-      cache.set(code, product) // `null` caches a "not found" result
-      if (product === null) throw new ProductNotFoundError(code)
-      return product
+  const promise = (async () => {
+    try {
+      const product = await lookupAll(code, options)
+      if (product) {
+        rememberProduct(code, product, 'scan')
+        return product
+      }
+      // Nothing live. Fall back to whatever the project already collected.
+      return recall(code)
+    } catch (error) {
+      const remembered = recall(code)
+      if (remembered) return remembered
+      throw error
+    }
+  })()
+    .then((resolved) => {
+      cache.set(code, resolved) // `null` caches a genuine "not found"
+      if (resolved === null) throw new ProductNotFoundError(code)
+      return resolved
     })
     .finally(() => inFlight.delete(code))
 
@@ -179,12 +224,33 @@ export async function fetchProduct(barcode, options = {}) {
   return promise
 }
 
+/** Wrap a knowledge-base record with the offline analysis. */
+function recall(code) {
+  const remembered = recallProduct(code)
+  if (!remembered) return null
+  return {
+    ...remembered,
+    fromKnowledgeBase: true,
+    info: analyzeBarcode(code),
+    checked: SOURCES.map((source) => source.id),
+  }
+}
+
 /** Fire every source in parallel and merge whatever comes back. */
 async function lookupAll(code, { signal } = {}) {
   const outcomes = await Promise.all(SOURCES.map((source) => requestSource(source, code, signal)))
 
   const found = outcomes.filter((outcome) => outcome.product)
-  if (found.length) return mergeProducts(found)
+  if (found.length) {
+    // MusicBrainz is a *media* database while the Open Facts family describes
+    // physical products, so a stray release sharing a food barcode would only
+    // add noise. Use its hits only when no product database knows the code.
+    const productHits = found.filter((outcome) => outcome.source.family === 'openfacts')
+    const merged = mergeProducts(productHits.length ? productHits : found)
+    merged.info = analyzeBarcode(code)
+    merged.checked = outcomes.map((outcome) => outcome.source.id)
+    return merged
+  }
 
   // Nothing found. If at least one database answered "no such product" we call
   // it a genuine not-found — but if *every* request errored we surface the
@@ -196,23 +262,47 @@ async function lookupAll(code, { signal } = {}) {
 /** Query a single database; never throws — the outcome object carries the error. */
 async function requestSource(source, code, signal) {
   try {
-    return await scheduleOn(source.host, async () => {
-      const url = `https://${source.host}/api/v2/product/${encodeURIComponent(code)}.json?fields=${FIELDS}`
-      const response = await fetch(url, { signal, headers: { Accept: 'application/json' } })
-      if (response.status === 404) return { source, ok: true, product: null }
-      if (!response.ok) return { source, ok: false, error: new Error(`${source.host} responded with ${response.status}`) }
-
-      const payload = await response.json().catch(() => null)
-      if (!payload || payload.status === 0 || !payload.product) return { source, ok: true, product: null }
-      const product = normalize(payload.product, source)
-      // Guard against the empty "ghost" records the open databases sometimes
-      // accumulate — a hit is only useful if it actually says *something*.
-      if (!isUseful(product)) return { source, ok: true, product: null }
-      return { source, ok: true, product }
-    })
+    const product = await scheduleOn(source.host, source.minInterval ?? MIN_INTERVAL, () =>
+      source.family === 'musicbrainz'
+        ? requestMusicBrainz(source, code, signal)
+        : requestOpenFacts(source, code, signal),
+    )
+    return { source, ok: true, product: product ?? null }
   } catch (error) {
     return { source, ok: false, product: null, error }
   }
+}
+
+async function requestOpenFacts(source, code, signal) {
+  const url = `https://${source.host}/api/v2/product/${encodeURIComponent(code)}.json?fields=${FIELDS}`
+  const response = await fetch(url, { signal, headers: { Accept: 'application/json' } })
+  if (response.status === 404) return null
+  if (!response.ok) throw new Error(`${source.host} responded with ${response.status}`)
+
+  const payload = await response.json().catch(() => null)
+  if (!payload || payload.status === 0 || !payload.product) return null
+
+  const product = normalize(payload.product, source)
+  // Guard against the empty "ghost" records the open databases sometimes
+  // accumulate — a hit is only useful if it actually says *something*.
+  return isUseful(product) ? product : null
+}
+
+async function requestMusicBrainz(source, code, signal) {
+  const query = encodeURIComponent(`barcode:${code}`)
+  const url = `https://${source.host}/ws/2/release/?query=${query}&fmt=json&limit=5`
+  const response = await fetch(url, { signal, headers: { Accept: 'application/json' } })
+
+  // MusicBrainz throttles anonymous/undescriptive clients with 403/429/503 (and
+  // a browser cannot set a custom User-Agent). Treat any such answer as "this
+  // source has nothing for us" — it must never break the whole lookup.
+  if (!response.ok) return null
+
+  const payload = await response.json().catch(() => null)
+  const releases = payload?.releases ?? []
+  // MusicBrainz search is fuzzy — only accept an exact barcode match.
+  const match = releases.find((release) => String(release.barcode ?? '').trim() === code)
+  return match ? normalizeRelease(match, code) : null
 }
 
 /** True when a record carries any meaningful, displayable information. */
@@ -247,9 +337,15 @@ function isUseful(product) {
  * @property {string[]} countries
  * @property {string}   packaging
  * @property {string}   stores
+ * @property {string}   format       media format (MusicBrainz)
+ * @property {string}   label        record label (MusicBrainz)
+ * @property {string}   releaseDate  release date (MusicBrainz)
  * @property {Record<string, number|null>} nutriments  per 100 g
  * @property {string}   source      winning database id
  * @property {string[]} sources     every database that had a hit
+ * @property {import('./barcodeInfo.js').BarcodeInfo} [info]  offline analysis
+ * @property {string[]} [checked]   every database that was queried
+ * @property {boolean}  [fromKnowledgeBase]
  */
 function normalize(product, source) {
   return {
@@ -269,9 +365,51 @@ function normalize(product, source) {
     countries: parseTags(product.countries_tags, null, 3),
     packaging: cleanText(product.packaging),
     stores: cleanText(product.stores),
+    format: '',
+    label: '',
+    releaseDate: '',
     nutriments: readNutriments(product.nutriments),
     source: source.id,
     sources: [source.id],
+  }
+}
+
+/** Shape a MusicBrainz release into the same flat record. */
+function normalizeRelease(release, code) {
+  const artists = (release['artist-credit'] ?? [])
+    .map((credit) => credit?.name)
+    .filter(Boolean)
+    .join(', ')
+  const labels = (release['label-info'] ?? [])
+    .map((info) => info?.label?.name)
+    .filter(Boolean)
+  const formats = (release.media ?? []).map((medium) => medium?.format).filter(Boolean)
+  const mbid = release.id
+
+  return {
+    barcode: String(release.barcode ?? code),
+    name: cleanText(release.title) || 'Unknown product',
+    genericName: '',
+    brand: artists,
+    quantity: formats[0] ?? '',
+    image: mbid ? `https://coverartarchive.org/release/${mbid}/front-250` : '',
+    imageSmall: '',
+    categories: [...new Set(formats)].slice(0, 4),
+    labels: [],
+    allergens: [],
+    ingredients: '',
+    nutriScore: '',
+    nova: null,
+    countries: release.country ? [String(release.country).toUpperCase()] : [],
+    packaging: '',
+    stores: '',
+    format: [...new Set(formats)].join(', '),
+    label: [...new Set(labels)].slice(0, 2).join(', '),
+    releaseDate: cleanText(release.date),
+    nutriments: readNutriments(null),
+    source: 'musicbrainz',
+    sources: ['musicbrainz'],
+    externalId: mbid ?? '',
   }
 }
 
@@ -312,6 +450,9 @@ function mergeProducts(found) {
     if (!merged.nova) merged.nova = product.nova
     if (!merged.packaging) merged.packaging = product.packaging
     if (!merged.stores) merged.stores = product.stores
+    if (!merged.format) merged.format = product.format
+    if (!merged.label) merged.label = product.label
+    if (!merged.releaseDate) merged.releaseDate = product.releaseDate
 
     unionInto(merged.categories, product.categories, 6)
     unionInto(merged.labels, product.labels, 6)
@@ -384,13 +525,9 @@ function validNova(value) {
 /** Pull the `*_100g` values out of the `nutriments` blob as plain numbers. */
 function readNutriments(nutriments) {
   const out = {}
-  if (!nutriments || typeof nutriments !== 'object') {
-    for (const key of NUTRIENT_KEYS) out[key] = null
-    return out
-  }
+  const source = nutriments && typeof nutriments === 'object' ? nutriments : {}
   for (const [key, raw] of Object.entries(NUTRIENT_MAP)) {
-    const value = toNumber(nutriments[raw])
-    out[key] = value
+    out[key] = toNumber(source[raw])
   }
   return out
 }

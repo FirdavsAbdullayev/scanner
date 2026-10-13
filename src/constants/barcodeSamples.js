@@ -56,4 +56,10 @@ export const SAMPLE_BARCODES = [
     hint: 'Bottled tea, 300 ml (Open Products Facts)',
     emoji: '📦',
   },
+  {
+    code: '093624969556',
+    label: 'Nirvana',
+    hint: 'Nevermind, vinyl — looked up in MusicBrainz',
+    emoji: '🎵',
+  },
 ]
