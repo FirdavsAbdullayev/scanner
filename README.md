@@ -92,3 +92,4 @@ src/
 ## 📄 License
 
 MIT. Product data © [Open Food Facts](https://world.openfoodfacts.org/) contributors (ODbL).
+# scanner
