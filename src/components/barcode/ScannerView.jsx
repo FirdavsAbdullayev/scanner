@@ -8,7 +8,7 @@ import { useLanguage } from '../../i18n/LanguageContext.jsx'
 import { useUI } from '../../context/UIContext.jsx'
 import { SAMPLE_BARCODES } from '../../constants/barcodeSamples.js'
 import { digitsOnly, isValidBarcode } from '../../utils/format.js'
-import { fetchProduct, InvalidBarcodeError, ProductNotFoundError } from '../../services/openFoodFacts.js'
+import { fetchProduct, InvalidBarcodeError, ProductNotFoundError, SOURCES } from '../../services/productLookup.js'
 
 /**
  * Full-page scanner: live camera on one side, manual entry + sample codes on
@@ -183,12 +183,23 @@ export function ScannerView() {
 
           <div className="mt-3">
             {state === 'loading' && (
-              <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
-                <LoaderCircle className="h-5 w-5 animate-spin text-emerald-500" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-3 w-1/2 rounded-full bg-slate-200 animate-shimmer" />
-                  <div className="h-3 w-1/3 rounded-full bg-slate-200 animate-shimmer" />
+              <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                <div className="flex items-center gap-3">
+                  <LoaderCircle className="h-5 w-5 animate-spin text-emerald-500" />
+                  <p className="text-sm font-semibold text-slate-600">{t('scanner.collecting')}</p>
                 </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {SOURCES.map((source) => (
+                    <span
+                      key={source.id}
+                      className="inline-flex animate-pulse items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500 ring-1 ring-slate-100"
+                    >
+                      <span aria-hidden="true">{source.emoji}</span>
+                      {t(source.labelKey)}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-400">{t('scanner.collectingHint')}</p>
               </div>
             )}
 

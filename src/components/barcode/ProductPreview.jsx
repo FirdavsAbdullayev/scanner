@@ -1,7 +1,19 @@
-import { BadgeCheck, ExternalLink, Hash, Layers, TriangleAlert } from 'lucide-react'
+import { useState } from 'react'
+import {
+  BadgeCheck,
+  ChevronDown,
+  ExternalLink,
+  Flame,
+  Hash,
+  Layers,
+  Sparkles,
+  Tag,
+  TriangleAlert,
+} from 'lucide-react'
 import { useLanguage } from '../../i18n/LanguageContext.jsx'
 import { ProductThumb } from '../ui/ProductThumb.jsx'
 import { Chip } from '../ui/Badge.jsx'
+import { SOURCES, sourceMeta } from '../../services/productLookup.js'
 
 const NUTRI_TONES = {
   a: 'bg-emerald-500 text-white',
@@ -11,20 +23,63 @@ const NUTRI_TONES = {
   e: 'bg-rose-500 text-white',
 }
 
+/** NOVA 1 (unprocessed) → 4 (ultra-processed). */
+const NOVA_TONES = {
+  1: 'bg-emerald-100 text-emerald-700',
+  2: 'bg-lime-100 text-lime-700',
+  3: 'bg-amber-100 text-amber-700',
+  4: 'bg-rose-100 text-rose-700',
+}
+
+const NUTRIENT_ROWS = [
+  { key: 'energyKcal', labelKey: 'product.energy', unit: 'kcal' },
+  { key: 'fat', labelKey: 'product.fat', unit: 'g' },
+  { key: 'saturatedFat', labelKey: 'product.saturated', unit: 'g' },
+  { key: 'carbohydrates', labelKey: 'product.carbs', unit: 'g' },
+  { key: 'sugars', labelKey: 'product.sugars', unit: 'g' },
+  { key: 'fiber', labelKey: 'product.fiber', unit: 'g' },
+  { key: 'proteins', labelKey: 'product.protein', unit: 'g' },
+  { key: 'salt', labelKey: 'product.salt', unit: 'g' },
+]
+
 /**
- * Renders a normalized Open Food Facts product.
+ * Renders a product that was automatically enriched from the open databases.
+ *
+ * Everything here was collected for the user the moment they scanned (or typed)
+ * the barcode: identity (name/brand/quantity), photos, categories, labels,
+ * allergens and the nutrition table — merged from as many sources as had data.
  *
  * @param {object} props
- * @param {import('../../services/openFoodFacts.js').NormalizedProduct} props.product
+ * @param {import('../../services/productLookup.js').NormalizedProduct} props.product
  * @param {React.ReactNode} [props.actions]  buttons rendered under the card
- * @param {boolean} [props.compact]
+ * @param {boolean} [props.compact]          condensed variant (add/edit form)
  */
 export function ProductPreview({ product, actions, compact = false }) {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
+  const [showAllIngredients, setShowAllIngredients] = useState(false)
+
   if (!product) return null
+
+  const numberFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 })
+
+  const foundSources = (product.sources?.length ? product.sources : [product.source])
+    .map((id) => sourceMeta(id) ?? SOURCES.find((s) => s.id === id))
+    .filter(Boolean)
+
+  const nutrients = NUTRIENT_ROWS.map((row) => ({
+    ...row,
+    value: product.nutriments?.[row.key],
+  })).filter((row) => Number.isFinite(row.value))
+
+  const hasDetails =
+    product.categories?.length > 0 ||
+    product.labels?.length > 0 ||
+    product.allergens?.length > 0 ||
+    nutrients.length > 0
 
   return (
     <div className="overflow-hidden rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/90 to-teal-50/60 p-4">
+      {/* Identity */}
       <div className="flex items-start gap-3.5">
         <ProductThumb
           src={product.image}
@@ -34,65 +89,152 @@ export function ProductPreview({ product, actions, compact = false }) {
         />
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <h3 className="text-balance text-sm font-bold leading-snug text-slate-900">{product.name}</h3>
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                {product.brand && <Chip className="bg-white/80 text-slate-600">{product.brand}</Chip>}
-                {product.quantity && <Chip className="bg-white/80 text-slate-600">{product.quantity}</Chip>}
-                {product.nutriScore && (
-                  <span
-                    className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md px-1 text-[10px] font-extrabold uppercase ${
-                      NUTRI_TONES[product.nutriScore] ?? 'bg-slate-400 text-white'
-                    }`}
-                    title={`${t('item.nutriscore')}: ${product.nutriScore.toUpperCase()}`}
-                  >
-                    {product.nutriScore}
-                  </span>
-                )}
-              </div>
-            </div>
+          <h3 className="text-balance text-sm font-bold leading-snug text-slate-900">{product.name}</h3>
+
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {product.brand && <Chip className="bg-white/80 text-slate-600">{product.brand}</Chip>}
+            {product.quantity && <Chip className="bg-white/80 text-slate-600">{product.quantity}</Chip>}
+            {product.nutriScore && (
+              <span
+                className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md px-1 text-[10px] font-extrabold uppercase ${
+                  NUTRI_TONES[product.nutriScore] ?? 'bg-slate-400 text-white'
+                }`}
+                title={`${t('item.nutriscore')}: ${product.nutriScore.toUpperCase()}`}
+              >
+                {product.nutriScore}
+              </span>
+            )}
+            {product.nova && (
+              <span
+                className={`inline-flex h-5 items-center justify-center rounded-md px-1.5 text-[10px] font-bold ${
+                  NOVA_TONES[product.nova] ?? 'bg-slate-100 text-slate-600'
+                }`}
+                title={t('product.novaHint')}
+              >
+                NOVA {product.nova}
+              </span>
+            )}
           </div>
 
-          <p className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
-            <BadgeCheck className="h-3.5 w-3.5" />
-            {t('item.fromOff')}
-          </p>
+          {/* Auto-collection banner + provenance */}
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
+              <Sparkles className="h-3.5 w-3.5" />
+              {t('product.auto')}
+            </span>
+            {foundSources.map((source) => (
+              <span
+                key={source.id}
+                className="inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-slate-600 ring-1 ring-emerald-100"
+                title={t('product.sourceTitle', { name: t(source.labelKey) })}
+              >
+                <span aria-hidden="true">{source.emoji}</span>
+                {t(source.labelKey)}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 
-      {product.categories?.length > 0 && (
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          <Layers className="h-3.5 w-3.5 text-emerald-600/70" />
-          {product.categories.slice(0, 4).map((category) => (
-            <Chip key={category} className="bg-white/80 text-slate-600">
-              {category}
-            </Chip>
-          ))}
+      {hasDetails && (
+        <div className={`mt-3.5 space-y-3 ${compact ? '' : 'rounded-xl bg-white/60 p-3'}`}>
+          {product.categories?.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Layers className="h-3.5 w-3.5 shrink-0 text-emerald-600/70" />
+              {product.categories.slice(0, compact ? 3 : 5).map((category) => (
+                <Chip key={category} className="bg-white/80 text-slate-600">
+                  {category}
+                </Chip>
+              ))}
+            </div>
+          )}
+
+          {!compact && product.labels?.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Tag className="h-3.5 w-3.5 shrink-0 text-emerald-600/70" />
+              {product.labels.map((label) => (
+                <Chip key={label} className="bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
+                  {label}
+                </Chip>
+              ))}
+            </div>
+          )}
+
+          {product.allergens?.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+              <span className="text-[10px] font-bold uppercase tracking-wide text-amber-600">
+                {t('product.allergens')}
+              </span>
+              {product.allergens.map((allergen) => (
+                <Chip key={allergen} className="bg-amber-50 text-amber-700 ring-1 ring-amber-100">
+                  {allergen}
+                </Chip>
+              ))}
+            </div>
+          )}
+
+          {!compact && nutrients.length > 0 && (
+            <div>
+              <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                <Flame className="h-3.5 w-3.5" />
+                {t('product.per100g')}
+              </p>
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                {nutrients.map((row) => (
+                  <div key={row.key} className="rounded-lg bg-white/80 px-2 py-1.5 ring-1 ring-slate-100">
+                    <p className="truncate text-[10px] font-medium text-slate-400">{t(row.labelKey)}</p>
+                    <p className="text-xs font-bold text-slate-700">
+                      {numberFormat.format(row.value)}
+                      <span className="ml-0.5 text-[10px] font-semibold text-slate-400">{row.unit}</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {product.ingredients && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowAllIngredients((prev) => !prev)}
+                className="flex w-full items-center gap-1.5 text-left text-[10px] font-bold uppercase tracking-wide text-slate-400"
+                aria-expanded={showAllIngredients}
+              >
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAllIngredients ? 'rotate-180' : ''}`} />
+                {t('recipes.ingredients')}
+              </button>
+              <p className={`mt-1 text-[11px] leading-relaxed text-slate-500 ${showAllIngredients ? '' : 'line-clamp-3'}`}>
+                {product.ingredients}
+              </p>
+            </div>
+          )}
         </div>
       )}
 
-      {product.ingredients && (
-        <p className="mt-3 line-clamp-3 text-[11px] leading-relaxed text-slate-500">
-          <span className="font-semibold text-slate-600">{t('recipes.ingredients')}: </span>
-          {product.ingredients}
-        </p>
-      )}
-
-      <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-slate-400">
+      {/* Footer: barcode + source links */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-slate-400">
         <span className="inline-flex items-center gap-1 font-mono">
           <Hash className="h-3.5 w-3.5" />
           {product.barcode}
         </span>
-        <a
-          href={`https://world.openfoodfacts.org/product/${product.barcode}`}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="inline-flex items-center gap-1 font-semibold text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
-        >
-          Open Food Facts
-          <ExternalLink className="h-3 w-3" />
-        </a>
+        {foundSources.map((source) => (
+          <a
+            key={source.id}
+            href={source.productUrl(product.barcode)}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="inline-flex items-center gap-1 font-semibold text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
+          >
+            {source.emoji} {t('product.viewSource')}
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        ))}
+        <span className="inline-flex items-center gap-1 text-emerald-700/70">
+          <BadgeCheck className="h-3.5 w-3.5" />
+          {t('product.verified')}
+        </span>
       </div>
 
       {actions && <div className="mt-4 flex flex-wrap gap-2">{actions}</div>}

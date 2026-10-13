@@ -36,4 +36,24 @@ export const SAMPLE_BARCODES = [
     hint: 'Honey Nut Cheerios, breakfast cereal',
     emoji: '🥣',
   },
+  // Non-food entries come from the sibling databases — great for showing the
+  // automatic multi-source lookup in action.
+  {
+    code: '4005900259615',
+    label: 'Nivea Sun',
+    hint: 'Sunscreen SPF 50, 200 ml (Open Beauty Facts)',
+    emoji: '🧴',
+  },
+  {
+    code: '7613034464927',
+    label: 'Purina ONE',
+    hint: 'Dry dog food, 340 g (Open Pet Food Facts)',
+    emoji: '🐾',
+  },
+  {
+    code: '8996001601242',
+    label: 'Pucuk Harum',
+    hint: 'Bottled tea, 300 ml (Open Products Facts)',
+    emoji: '📦',
+  },
 ]

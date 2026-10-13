@@ -2,7 +2,7 @@
 
 **Muzlatgich va Mahsulotlar Muddati Nazoratchisi** — a modern, responsive expiry-tracking dashboard for your fridge, pantry and medicine cabinet.
 
-Built with **React 19 + Vite**, **Tailwind CSS v4** and **lucide-react**, with real barcode scanning (**@zxing/browser**) and live product data from the free **[Open Food Facts](https://world.openfoodfacts.org/)** API.
+Built with **React 19 + Vite**, **Tailwind CSS v4** and **lucide-react**, with real barcode scanning (**@zxing/browser**) and automatic product intelligence gathered live from the free **Open Facts** family — [Open Food Facts](https://world.openfoodfacts.org/), [Open Beauty Facts](https://world.openbeautyfacts.org/), [Open Products Facts](https://world.openproductsfacts.org/) and [Open Pet Food Facts](https://world.openpetfoodfacts.org/).
 
 ---
 
@@ -19,14 +19,15 @@ Built with **React 19 + Vite**, **Tailwind CSS v4** and **lucide-react**, with r
 - **Status is always computed** from the expiry date — `Fresh` (> 3 days), `Expiring soon` (≤ 3 days), `Expired` — so it stays correct across midnight and across sessions.
 - Add / edit / delete (with confirmation) / mark consumed / quantity stepper.
 
-### Barcode + Open Food Facts
+### Barcode → automatic product intelligence
 - **Live camera scanning** with a scan reticle, beep-style flash feedback and duplicate-read debouncing.
 - Tuned for real 1D barcodes: a high-resolution "environment" stream with continuous autofocus, the `TRY_HARDER` decode hint, a 160 ms attempt interval, and a bonus native `BarcodeDetector` pass on Android Chrome.
 - Flashlight (torch) and camera-flip buttons appear automatically when the device supports them.
+- **Every scanned code is queried against four open databases at once** (food, beauty, general products, pet food) and the results are merged, so each item automatically gets its name, brand, quantity, photo, categories, labels, allergens and per-100 g nutrition — even for non-food items.
+- The collected record is stored with the inventory item, so it is available offline afterwards.
 - Automatic fallback to manual entry + one-tap sample barcodes when there's no camera or permission is denied.
-- Any scanned/typed barcode can be added to the inventory even when Open Food Facts has no record of it (typical for new or local products) — the code is kept and the rest is filled in by hand.
-- Product lookup fills in the name, brand, photo, categories and ingredients, and the data is cached and rate-limited client-side.
-- Sample codes to try: `3017620422003`, `5449000000996`, `7622210449283`, `737628064502`, `0016000275270`.
+- Any scanned/typed barcode can be added to the inventory even when no database has a record of it (typical for new or local products) — the code is kept and the rest is filled in by hand.
+- Sample codes to try: `3017620422003`, `5449000000996`, `7622210449283`, `737628064502`, `0016000275270`, `4005900259615` (beauty), `7613034464927` (pet food), `8996001601242` (products).
 
 ### AI Smart Kitchen
 - One click analyses the items expiring soonest and suggests **2–3 recipes** with time, servings, difficulty, ingredients and step-by-step instructions.
@@ -74,7 +75,7 @@ src/
 ├── hooks/                      # useInventory, useLocalStorage, useToast
 ├── i18n/                       # uz.js, en.js, ru.js, LanguageContext
 ├── recipes/                    # recipeTemplates, recipeSignals, recipeEngine
-├── services/openFoodFacts.js   # barcode → product (cached + throttled)
+├── services/productLookup.js   # barcode → merged product from 4 open databases (cached + throttled)
 └── utils/                      # dateUtils, format helpers
 ```
 

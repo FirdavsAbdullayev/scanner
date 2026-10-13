@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createSeedItems } from '../data/seedData.js'
 import { compareByExpiry, daysUntil, getStatus, STATUS } from '../utils/dateUtils.js'
 import { cleanText, uid } from '../utils/format.js'
-import { fetchProduct, ProductNotFoundError, InvalidBarcodeError } from '../services/openFoodFacts.js'
+import { fetchProduct, ProductNotFoundError, InvalidBarcodeError } from '../services/productLookup.js'
 
 const STORAGE_KEY = 'aet:inventory:v1'
 const CONSUMED_RETENTION_MS = 1000 * 60 * 60 * 24 * 30 // keep consumed rows for 30 days
@@ -47,7 +47,7 @@ function loadInitial() {
  *  - CRUD (add / update / delete / toggle-consumed)
  *  - persist to localStorage
  *  - derive stats & grouped views with useMemo (status is never stored!)
- *  - lazily enrich barcode items with Open Food Facts data on first load
+ *  - lazily enrich barcode items with open-database data on first load
  */
 export function useInventory() {
   const [items, setItems] = useState(loadInitial)
@@ -70,7 +70,7 @@ export function useInventory() {
     })
   }, [])
 
-  // ── lazy Open Food Facts enrichment ───────────────────────────────────────
+  // ── lazy multi-source enrichment ──────────────────────────────────────────
   // Runs once on mount; only for seed items that already carry a barcode but
   // have no cached product payload. Uses a ref snapshot so it never re-fires.
   const attempted = useRef(new Set())
@@ -228,8 +228,9 @@ export function useInventory() {
     clearAll,
     resetToSeed,
     /**
-     * Look up a barcode and return the product without mutating inventory.
-     * The form uses this before the item even exists.
+     * Look up a barcode (across every open database) and return the merged
+     * product without mutating inventory. The form uses this before the item
+     * even exists.
      */
     lookupProduct: fetchProduct,
     isProductNotFound: (error) => error instanceof ProductNotFoundError,
